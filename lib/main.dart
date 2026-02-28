@@ -151,6 +151,47 @@ class _FirstScreenState extends State<FirstScreen> {
     );
   }
 
+  // Функция для отображения руководства
+  void _showUserGuide() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Руководство пользователя'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const <Widget>[
+                Text('1. Инициализация:'),
+                Text('Введите базовые параметры и загрузите фото для оценки вашего физического состояния.'),
+                SizedBox(height: 10),
+                Text('2. Цель:'),
+                Text('Выберите цель.'),
+                SizedBox(height: 10),
+                Text('3. Результаты анализа:'),
+                Text('Ознакомтесь с информацией, полученной после анализа ваших параметров.'),
+                SizedBox(height: 10),
+                Text('4. План тренировок и диет:'),
+                Text('Ознакомтесь с составленным планом тренировок и диет.'),
+                SizedBox(height: 10),
+                Text('5. Прогресс:'),
+                Text('Следите за вашим прогрессом к своей цели.'),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Закрыть'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final canProceed = _result != null && !_loading;
@@ -158,6 +199,12 @@ class _FirstScreenState extends State<FirstScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Инициализация профиля'),
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            onPressed: _showUserGuide, // При нажатии на кнопку отображается руководство
+          ),
+        ],
       ),
       body: SafeArea(
         child: ListView(
