@@ -85,7 +85,15 @@ class _FirstScreenState extends State<FirstScreen> {
       _imageFile = File(xfile.path);
     });
   }
+  void _removeImage() {
+    setState(() {
+      _imageFile = null;
 
+      // Чтобы результат не “оставался” от предыдущего фото
+      _result = null;
+      _error = null;
+    });
+  }
   Future<PredictionResult> _predict({
     required File image,
     required String gender,
@@ -310,11 +318,33 @@ class _FirstScreenState extends State<FirstScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      OutlinedButton.icon(
-                        onPressed: _loading ? null : _pickImage,
-                        icon: const Icon(Icons.photo),
-                        label: Text(_imageFile == null ? 'Выбрать фото' : 'Изменить фото'),
-                      ),
+                      if (_imageFile == null)
+                        OutlinedButton.icon(
+                          onPressed: _loading ? null : _pickImage,
+                          icon: const Icon(Icons.photo),
+                          label: const Text('Выбрать фото'),
+                        )
+                      else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _loading ? null : _pickImage,
+                                icon: const Icon(Icons.photo),
+                                label: const Text('Изменить фото'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            OutlinedButton.icon(
+                              onPressed: _loading ? null : _removeImage,
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('Удалить'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ],
+                        ),
 
                       if (_imageFile != null) ...[
                         const SizedBox(height: 12),
