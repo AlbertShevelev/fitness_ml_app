@@ -88,8 +88,6 @@ class FirstScreen extends StatefulWidget {
 }
 
 class _FirstScreenState extends State<FirstScreen> {
-  // Важно: endpoint должен совпадать с бекендом /predict (FastAPI).
-  // См. app.py: file + gender + age. :contentReference[oaicite:1]{index=1}
   static const String _apiBaseUrl = 'http://127.0.0.1:8000';
   static const String _predictPath = '/predict';
 
@@ -192,7 +190,6 @@ class _FirstScreenState extends State<FirstScreen> {
   }
 
   void _goNext() {
-    // Заглушка: переход на экран генерации плана тренировок/диеты.
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PlanScreenStub(
