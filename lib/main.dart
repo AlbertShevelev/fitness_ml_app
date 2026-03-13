@@ -150,7 +150,43 @@ class _FirstScreenState extends State<FirstScreen> {
       ),
     );
   }
-
+  void _showBmiInfo() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Оценка BMI и персонализация'),
+          content: const SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Приложение использует пол, возраст и фото для оценки категории BMI '
+                  'и последующей персонализации рекомендаций.',
+                ),
+                SizedBox(height: 12),
+                Text('Рекомендации к фото:'),
+                SizedBox(height: 6),
+                Text('• Хорошее освещение, без сильных теней.'),
+                Text('• Минимум посторонних объектов на фоне.'),
+                Text('• Желательно, чтобы фигура занимала заметную часть кадра.'),
+                SizedBox(height: 12),
+                Text(
+                  'Результат предназначен для предварительной оценки и может иметь погрешность.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Закрыть'),
+            ),
+          ],
+        );
+      },
+    );
+  }
   // Функция для отображения руководства
   void _showUserGuide() {
     showDialog(
@@ -213,10 +249,21 @@ class _FirstScreenState extends State<FirstScreen> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(
-                  'Введите базовые параметры и загрузите фото для оценки категории BMI.\n'
-                  'Результат используется как признак для персонализации рекомендаций.',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Укажите пол, возраст и фото для оценки BMI и персонализации рекомендаций.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.info_outline),
+                      tooltip: 'Подробнее',
+                      onPressed: _showBmiInfo,
+                    ),
+                  ],
                 ),
               ),
             ),
