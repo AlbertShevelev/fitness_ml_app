@@ -90,7 +90,7 @@ class FirstScreen extends StatefulWidget {
 class _FirstScreenState extends State<FirstScreen> {
   // Важно: endpoint должен совпадать с бекендом /predict (FastAPI).
   // См. app.py: file + gender + age. :contentReference[oaicite:1]{index=1}
-  static const String _apiBaseUrl = 'http://10.0.2.2:8000';
+  static const String _apiBaseUrl = 'http://127.0.0.1:8000';
   static const String _predictPath = '/predict';
 
   final _formKey = GlobalKey<FormState>();
@@ -429,7 +429,7 @@ class _FirstScreenState extends State<FirstScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       DropdownButtonFormField<String>(
-                        value: _gender,
+                        initialValue: _gender,
                         items: const [
                           DropdownMenuItem(value: 'female', child: Text('Женский (female)')),
                           DropdownMenuItem(value: 'male', child: Text('Мужской (male)')),
@@ -568,7 +568,7 @@ class PlanScreenStub extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('План (заглушка)')),
+      appBar: AppBar(title: const Text('План')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Text(
