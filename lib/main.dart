@@ -328,6 +328,175 @@ class SurrogateResult {
     );
   }
 }
+
+
+class WorkoutExerciseData {
+  final String name;
+  final int sets;
+  final String reps;
+  final int restSec;
+  final String tempo;
+  final String notes;
+
+  WorkoutExerciseData({
+    required this.name,
+    required this.sets,
+    required this.reps,
+    required this.restSec,
+    required this.tempo,
+    required this.notes,
+  });
+
+  factory WorkoutExerciseData.fromJson(Map<String, dynamic> json) {
+    return WorkoutExerciseData(
+      name: (json['name'] ?? '').toString(),
+      sets: (json['sets'] as num?)?.toInt() ?? 0,
+      reps: (json['reps'] ?? '').toString(),
+      restSec: (json['rest_sec'] as num?)?.toInt() ?? 0,
+      tempo: (json['tempo'] ?? '').toString(),
+      notes: (json['notes'] ?? '').toString(),
+    );
+  }
+}
+
+class WorkoutDayData {
+  final String dayLabel;
+  final String focus;
+  final List<WorkoutExerciseData> exercises;
+
+  WorkoutDayData({
+    required this.dayLabel,
+    required this.focus,
+    required this.exercises,
+  });
+
+  factory WorkoutDayData.fromJson(Map<String, dynamic> json) {
+    return WorkoutDayData(
+      dayLabel: (json['day_label'] ?? '').toString(),
+      focus: (json['focus'] ?? '').toString(),
+      exercises: (json['exercises'] as List<dynamic>? ?? [])
+          .map((e) => WorkoutExerciseData.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+class NutritionPlanData {
+  final int kcalTarget;
+  final int proteinG;
+  final int fatG;
+  final int carbsG;
+  final int waterMl;
+  final List<String> notes;
+
+  NutritionPlanData({
+    required this.kcalTarget,
+    required this.proteinG,
+    required this.fatG,
+    required this.carbsG,
+    required this.waterMl,
+    required this.notes,
+  });
+
+  factory NutritionPlanData.fromJson(Map<String, dynamic> json) {
+    return NutritionPlanData(
+      kcalTarget: (json['kcal_target'] as num?)?.toInt() ?? 0,
+      proteinG: (json['protein_g'] as num?)?.toInt() ?? 0,
+      fatG: (json['fat_g'] as num?)?.toInt() ?? 0,
+      carbsG: (json['carbs_g'] as num?)?.toInt() ?? 0,
+      waterMl: (json['water_ml'] as num?)?.toInt() ?? 0,
+      notes: (json['notes'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+    );
+  }
+}
+
+class ProgressionRuleData {
+  final String week;
+  final String condition;
+  final String action;
+  final String rationale;
+
+  ProgressionRuleData({
+    required this.week,
+    required this.condition,
+    required this.action,
+    required this.rationale,
+  });
+
+  factory ProgressionRuleData.fromJson(Map<String, dynamic> json) {
+    return ProgressionRuleData(
+      week: (json['week'] ?? '').toString(),
+      condition: (json['condition'] ?? '').toString(),
+      action: (json['action'] ?? '').toString(),
+      rationale: (json['rationale'] ?? '').toString(),
+    );
+  }
+}
+
+class RecommendationPlanData {
+  final String planId;
+  final String title;
+  final String summary;
+  final int weeklyFrequency;
+  final String difficulty;
+  final List<WorkoutDayData> workoutDays;
+  final NutritionPlanData nutrition;
+  final List<ProgressionRuleData> progressionRules;
+  final List<String> safetyNotes;
+
+  RecommendationPlanData({
+    required this.planId,
+    required this.title,
+    required this.summary,
+    required this.weeklyFrequency,
+    required this.difficulty,
+    required this.workoutDays,
+    required this.nutrition,
+    required this.progressionRules,
+    required this.safetyNotes,
+  });
+
+  factory RecommendationPlanData.fromJson(Map<String, dynamic> json) {
+    return RecommendationPlanData(
+      planId: (json['plan_id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      summary: (json['summary'] ?? '').toString(),
+      weeklyFrequency: (json['weekly_frequency'] as num?)?.toInt() ?? 0,
+      difficulty: (json['difficulty'] ?? '').toString(),
+      workoutDays: (json['workout_days'] as List<dynamic>? ?? [])
+          .map((e) => WorkoutDayData.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      nutrition: NutritionPlanData.fromJson(json['nutrition'] as Map<String, dynamic>? ?? {}),
+      progressionRules: (json['progression_rules'] as List<dynamic>? ?? [])
+          .map((e) => ProgressionRuleData.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      safetyNotes: (json['safety_notes'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+    );
+  }
+}
+
+class RecommendationResult {
+  final String status;
+  final RecommendationPlanData plan;
+  final List<String> explanation;
+  final Map<String, dynamic> metadata;
+
+  RecommendationResult({
+    required this.status,
+    required this.plan,
+    required this.explanation,
+    required this.metadata,
+  });
+
+  factory RecommendationResult.fromJson(Map<String, dynamic> json) {
+    return RecommendationResult(
+      status: (json['status'] ?? '').toString(),
+      plan: RecommendationPlanData.fromJson(json['plan'] as Map<String, dynamic>? ?? {}),
+      explanation: (json['explanation'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      metadata: Map<String, dynamic>.from(json['metadata'] as Map<String, dynamic>? ?? {}),
+    );
+  }
+}
 class FirstScreen extends StatefulWidget {
   const FirstScreen({super.key});
 
@@ -339,6 +508,7 @@ class _FirstScreenState extends State<FirstScreen> {
   static const String _apiBaseUrl = 'http://127.0.0.1:8000';
   static const String _predictPath = '/api/v1/cv/analyze';
   static const String _surrogatePath = '/api/v1/surrogate/predict';
+  static const String _recommendationPath = '/api/v1/recommendation/generate';
 
   final _formKey = GlobalKey<FormState>();
   final _ageController = TextEditingController();
@@ -355,6 +525,8 @@ class _FirstScreenState extends State<FirstScreen> {
   CVAnalysisResult? _result;
   SurrogateResult? _surrogateResult;
   String? _surrogateError;
+  RecommendationResult? _recommendationResult;
+  String? _recommendationError;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -372,6 +544,8 @@ class _FirstScreenState extends State<FirstScreen> {
       _result = null;
       _surrogateResult = null;
       _surrogateError = null;
+      _recommendationResult = null;
+      _recommendationError = null;
     });
 
     final XFile? xfile = await _picker.pickImage(
@@ -394,6 +568,8 @@ class _FirstScreenState extends State<FirstScreen> {
       _result = null;
       _surrogateResult = null;
       _surrogateError = null;
+      _recommendationResult = null;
+      _recommendationError = null;
       _error = null;
     });
   }
@@ -479,12 +655,60 @@ class _FirstScreenState extends State<FirstScreen> {
     return SurrogateResult.fromJson(jsonBody);
   }
 
+
+  Future<RecommendationResult> _generateRecommendation({
+    required int age,
+    required double heightCm,
+    required double weightKg,
+    required SurrogateResult surrogate,
+  }) async {
+    final uri = Uri.parse('$_apiBaseUrl$_recommendationPath');
+
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'questionnaire': {
+          'gender': _gender,
+          'age': age,
+          'height_cm': heightCm,
+          'weight_kg': weightKg,
+          'goal': _goal,
+          'experience_level': _experienceLevel,
+        },
+        'surrogate_prediction': {
+          'umax': surrogate.prediction.umax,
+          'U': surrogate.prediction.u,
+          'sigmavm_max': surrogate.prediction.sigmavmMax,
+          'Rx': surrogate.prediction.rx,
+        },
+        'surrogate_interpretation': {
+          'load_score': surrogate.interpretation.loadScore,
+          'level': surrogate.interpretation.level,
+          'summary': surrogate.interpretation.summary,
+          'progression_hint': surrogate.interpretation.progressionHint,
+        },
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractApiError(response));
+    }
+
+    final Map<String, dynamic> jsonBody =
+        jsonDecode(response.body) as Map<String, dynamic>;
+
+    return RecommendationResult.fromJson(jsonBody);
+  }
+
   Future<void> _onSubmit() async {
     setState(() {
       _error = null;
       _result = null;
       _surrogateResult = null;
       _surrogateError = null;
+      _recommendationResult = null;
+      _recommendationError = null;
     });
 
     if (!_formKey.currentState!.validate()) return;
@@ -513,6 +737,18 @@ class _FirstScreenState extends State<FirstScreen> {
           experienceLevel: _experienceLevel,
         );
         setState(() => _surrogateResult = surrogateRes);
+
+        try {
+          final recommendationRes = await _generateRecommendation(
+            age: age,
+            heightCm: heightCm,
+            weightKg: weightKg,
+            surrogate: surrogateRes,
+          );
+          setState(() => _recommendationResult = recommendationRes);
+        } catch (e) {
+          setState(() => _recommendationError = _humanizeError(e.toString()));
+        }
       } catch (e) {
         setState(() => _surrogateError = _humanizeError(e.toString()));
       }
@@ -526,9 +762,10 @@ class _FirstScreenState extends State<FirstScreen> {
   void _goNext() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PlanScreenStub(
+        builder: (_) => PlanScreen(
           result: _result!,
-          surrogateResult: _surrogateResult,
+          surrogateResult: _surrogateResult!,
+          recommendationResult: _recommendationResult!,
         ),
       ),
     );
@@ -694,6 +931,18 @@ class _FirstScreenState extends State<FirstScreen> {
         return 'Высокий';
       default:
         return level;
+    }
+  }
+
+  String _difficultyLabel(String difficulty) {
+    switch (difficulty) {
+      case 'advanced':
+        return 'Продвинутый';
+      case 'intermediate':
+        return 'Средний';
+      case 'beginner':
+      default:
+        return 'Начальный';
     }
   }
 
@@ -1411,9 +1660,168 @@ class _FirstScreenState extends State<FirstScreen> {
     );
   }
 
+
+
+  Widget _buildRecommendationErrorCard(String message) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.rule_folder_outlined, color: Colors.orange, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'План пока не сформирован',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        height: 1.35,
+                        color: cs.onSurface.withValues(alpha: 0.82),
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecommendationResultCard(RecommendationResult result) {
+    final plan = result.plan;
+    final loadColor = _loadScoreColor(
+      context,
+      (_surrogateResult?.interpretation.loadScore ?? 50),
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.fact_check_outlined, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Рекомендованный план',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: loadColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _difficultyLabel(plan.difficulty),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: loadColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            plan.title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            plan.summary,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context: context,
+                icon: Icons.calendar_month_outlined,
+                label: 'Частота',
+                value: '${plan.weeklyFrequency} трен./нед.',
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              _buildInfoChip(
+                context: context,
+                icon: Icons.restaurant_menu_outlined,
+                label: 'Калории',
+                value: '${plan.nutrition.kcalTarget} ккал',
+                color: Colors.teal.shade700,
+              ),
+              _buildInfoChip(
+                context: context,
+                icon: Icons.egg_alt_outlined,
+                label: 'Белок',
+                value: '${plan.nutrition.proteinG} г',
+                color: Colors.orange.shade700,
+              ),
+            ],
+          ),
+          if (result.explanation.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildSectionTitle(context, 'Почему выбран этот план'),
+            ...result.explanation.take(3).map(
+              (e) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Icon(Icons.check_circle_outline_rounded, size: 18),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(e)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final canProceed = _result != null && _surrogateResult != null && !_loading;
+    final canProceed = _result != null && _surrogateResult != null && _recommendationResult != null && !_loading;
 
     return Scaffold(
       appBar: AppBar(
@@ -1753,10 +2161,20 @@ class _FirstScreenState extends State<FirstScreen> {
                       if (_surrogateResult != null) ...[
                         const SizedBox(height: 12),
                         _buildSurrogateResultCard(_surrogateResult!),
+                      ],
+
+                      if (_recommendationError != null) ...[
+                        const SizedBox(height: 12),
+                        _buildRecommendationErrorCard(_recommendationError!),
+                      ],
+
+                      if (_recommendationResult != null) ...[
+                        const SizedBox(height: 12),
+                        _buildRecommendationResultCard(_recommendationResult!),
                         const SizedBox(height: 12),
                         FilledButton.tonal(
                           onPressed: canProceed ? _goNext : null,
-                          child: const Text('Перейти к плану'),
+                          child: const Text('Открыть детальный план'),
                         ),
                       ],
                     ],
@@ -1771,38 +2189,362 @@ class _FirstScreenState extends State<FirstScreen> {
   }
 }
 
-class PlanScreenStub extends StatelessWidget {
+class PlanScreen extends StatelessWidget {
   final CVAnalysisResult result;
-  final SurrogateResult? surrogateResult;
+  final SurrogateResult surrogateResult;
+  final RecommendationResult recommendationResult;
 
-  const PlanScreenStub({
+  const PlanScreen({
     super.key,
     required this.result,
     required this.surrogateResult,
+    required this.recommendationResult,
   });
+
+  String _difficultyLabel(String difficulty) {
+    switch (difficulty) {
+      case 'advanced':
+        return 'Продвинутый';
+      case 'intermediate':
+        return 'Средний';
+      case 'beginner':
+      default:
+        return 'Начальный';
+    }
+  }
+
+  String _surrogateLevelLabel(String level) {
+    switch (level) {
+      case 'low':
+        return 'Низкий';
+      case 'moderate':
+        return 'Умеренный';
+      case 'high':
+        return 'Высокий';
+      default:
+        return level;
+    }
+  }
+
+  Widget _sectionTitle(BuildContext context, String text) {
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+    );
+  }
+
+  Widget _chip(BuildContext context, IconData icon, String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54)),
+              const SizedBox(height: 2),
+              Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _exerciseTile(BuildContext context, WorkoutExerciseData ex) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(ex.name, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _chip(context, Icons.repeat_rounded, 'Подходы', '${ex.sets}', Theme.of(context).colorScheme.primary),
+              _chip(context, Icons.tag_rounded, 'Повторения', ex.reps, Colors.teal.shade700),
+              _chip(context, Icons.timer_outlined, 'Отдых', '${ex.restSec} сек', Colors.orange.shade700),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('Темп: ${ex.tempo}', style: Theme.of(context).textTheme.bodyMedium),
+          if (ex.notes.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(ex.notes, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black87)),
+          ],
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final surrogate = surrogateResult;
+    final plan = recommendationResult.plan;
+    final loadColor = surrogateResult.interpretation.level == 'low'
+        ? Colors.green.shade700
+        : surrogateResult.interpretation.level == 'moderate'
+            ? Colors.orange.shade700
+            : Theme.of(context).colorScheme.error;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('План (заглушка)')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text(
-          'Далее предполагается генерация персонализированного плана тренировок и питания.\n\n'
-          'CV-признаки:\n'
-          '- photo_quality_score: ${result.quality.photoQualityScore.toStringAsFixed(3)}\n'
-          '- keypoint_confidence_mean: ${result.quality.keypointConfidenceMean.toStringAsFixed(3)}\n'
-          '- torso_tilt_deg: ${result.features.torsoTiltDeg.toStringAsFixed(2)}\n'
-          '- shoulder_tilt_deg: ${result.features.shoulderTiltDeg.toStringAsFixed(2)}\n'
-          '- pelvis_tilt_deg: ${result.features.pelvisTiltDeg.toStringAsFixed(2)}\n\n'
-          'Суррогатная оценка:\n'
-          '- load_score: ${surrogate?.interpretation.loadScore ?? 0}\n'
-          '- level: ${surrogate?.interpretation.level ?? '-'}\n'
-          '- umax: ${surrogate != null ? surrogate.prediction.umax.toStringAsFixed(4) : '-'}\n'
-          '- U: ${surrogate != null ? surrogate.prediction.u.toStringAsFixed(4) : '-'}\n'
-          '- sigmavm_max: ${surrogate != null ? surrogate.prediction.sigmavmMax.toStringAsFixed(4) : '-'}',
+      appBar: AppBar(
+        title: const Text('Персональный план'),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Theme.of(context).colorScheme.primary,
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.82),
+              ],
+            ),
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          plan.title,
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: loadColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          _surrogateLevelLabel(surrogateResult.interpretation.level),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: loadColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(plan.summary, style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4)),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _chip(context, Icons.calendar_month_outlined, 'Частота', '${plan.weeklyFrequency} трен./нед.', Theme.of(context).colorScheme.primary),
+                      _chip(context, Icons.fitness_center_outlined, 'Сложность', _difficultyLabel(plan.difficulty), Colors.teal.shade700),
+                      _chip(context, Icons.speed_rounded, 'Load score', '${surrogateResult.interpretation.loadScore}/100', loadColor),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _sectionTitle(context, 'Структура тренировок'),
+            const SizedBox(height: 10),
+            ...plan.workoutDays.map(
+              (day) => Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                ),
+                child: ExpansionTile(
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  title: Text(day.dayLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text(day.focus),
+                  children: day.exercises.map((ex) => _exerciseTile(context, ex)).toList(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _sectionTitle(context, 'Питание'),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _chip(context, Icons.local_fire_department_outlined, 'Калории', '${plan.nutrition.kcalTarget} ккал', Colors.orange.shade700),
+                      _chip(context, Icons.egg_alt_outlined, 'Белок', '${plan.nutrition.proteinG} г', Colors.teal.shade700),
+                      _chip(context, Icons.opacity_outlined, 'Жиры', '${plan.nutrition.fatG} г', Theme.of(context).colorScheme.primary),
+                      _chip(context, Icons.rice_bowl_outlined, 'Углеводы', '${plan.nutrition.carbsG} г', Colors.green.shade700),
+                      _chip(context, Icons.water_drop_outlined, 'Вода', '${plan.nutrition.waterMl} мл', Colors.blue.shade700),
+                    ],
+                  ),
+                  if (plan.nutrition.notes.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    ...plan.nutrition.notes.map(
+                      (note) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(Icons.check_circle_outline_rounded, size: 18),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(note)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _sectionTitle(context, 'Правила прогрессии'),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ...plan.progressionRules.map(
+                    (rule) => Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(rule.week, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 6),
+                          Text('Условие: ${rule.condition}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4)),
+                          const SizedBox(height: 4),
+                          Text('Действие: ${rule.action}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4)),
+                          const SizedBox(height: 4),
+                          Text('Обоснование: ${rule.rationale}', style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4, color: Colors.black54)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _sectionTitle(context, 'Пояснение выбора'),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ...recommendationResult.explanation.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 2),
+                            child: Icon(Icons.arrow_right_rounded),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(child: Text(item)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Сводка surrogate-модуля: ${surrogateResult.interpretation.summary}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+            if (plan.safetyNotes.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _sectionTitle(context, 'Замечания по безопасности'),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ...plan.safetyNotes.map(
+                      (note) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(Icons.shield_outlined, size: 18),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(note)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+          ],
         ),
       ),
     );

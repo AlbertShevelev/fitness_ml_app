@@ -2,7 +2,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 class Keypoint(BaseModel):
     x: float
     y: float
@@ -88,4 +87,59 @@ class SurrogatePredictionResponse(BaseModel):
     prediction: SurrogateOutput
     interpretation: SurrogateInterpretation
     warnings: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+class WorkoutExercise(BaseModel):
+    name: str
+    sets: int = Field(..., ge=1, le=10)
+    reps: str
+    rest_sec: int = Field(..., ge=0, le=600)
+    tempo: str = '2-0-2'
+    notes: str = ''
+
+
+class WorkoutDay(BaseModel):
+    day_label: str
+    focus: str
+    exercises: List[WorkoutExercise]
+
+
+class NutritionPlan(BaseModel):
+    kcal_target: int
+    protein_g: int
+    fat_g: int
+    carbs_g: int
+    water_ml: int
+    notes: List[str] = Field(default_factory=list)
+
+
+class ProgressionRule(BaseModel):
+    week: str
+    condition: str
+    action: str
+    rationale: str
+
+
+class RecommendationPlan(BaseModel):
+    plan_id: str
+    title: str
+    summary: str
+    weekly_frequency: int = Field(..., ge=2, le=7)
+    difficulty: str
+    workout_days: List[WorkoutDay]
+    nutrition: NutritionPlan
+    progression_rules: List[ProgressionRule]
+    safety_notes: List[str] = Field(default_factory=list)
+
+
+class RecommendationGenerateRequest(BaseModel):
+    questionnaire: Questionnaire
+    surrogate_prediction: SurrogateOutput
+    surrogate_interpretation: SurrogateInterpretation
+
+
+class RecommendationResponse(BaseModel):
+    status: str
+    plan: RecommendationPlan
+    explanation: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
