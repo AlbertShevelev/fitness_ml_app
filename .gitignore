@@ -43,3 +43,32 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# ===== Python backend =====
+backend/.venv/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+
+# Environment files
+backend/.env
+
+# Uploaded/temp files
+backend/uploads/
+backend/tmp/
+backend/temp/
+
+# Model artifacts
+backend/models/*.task
+backend/models/*.tflite
+backend/models/*.onnx
+backend/models/*.pt
+
+# Logs
+backend/*.log
+backend/logs/
+
+# OS/editor
+backend/.DS_Store

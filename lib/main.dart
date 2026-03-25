@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:http_parser/http_parser.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   runApp(const MyApp());
@@ -66,16 +68,137 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class PredictionResult {
-  final String bmiCategory;
+class CVQuality {
+  final bool bodyDetected;
+  final bool bodyFullyVisible;
+  final double photoQualityScore;
+  final double keypointConfidenceMean;
+  final double visibleKeypointsRatio;
+
+  CVQuality({
+    required this.bodyDetected,
+    required this.bodyFullyVisible,
+    required this.photoQualityScore,
+    required this.keypointConfidenceMean,
+    required this.visibleKeypointsRatio,
+  });
+
+  factory CVQuality.fromJson(Map<String, dynamic> json) {
+    return CVQuality(
+      bodyDetected: json['body_detected'] == true,
+      bodyFullyVisible: json['body_fully_visible'] == true,
+      photoQualityScore: (json['photo_quality_score'] as num?)?.toDouble() ?? 0.0,
+      keypointConfidenceMean: (json['keypoint_confidence_mean'] as num?)?.toDouble() ?? 0.0,
+      visibleKeypointsRatio: (json['visible_keypoints_ratio'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class CVKeypoint {
+  final double x;
+  final double y;
+  final double? z;
   final double confidence;
 
-  PredictionResult({required this.bmiCategory, required this.confidence});
+  CVKeypoint({
+    required this.x,
+    required this.y,
+    required this.z,
+    required this.confidence,
+  });
 
-  factory PredictionResult.fromJson(Map<String, dynamic> json) {
-    return PredictionResult(
-      bmiCategory: (json['bmi_category'] ?? '').toString(),
-      confidence: (json['confidence'] is num) ? (json['confidence'] as num).toDouble() : 0.0,
+  factory CVKeypoint.fromJson(Map<String, dynamic> json) {
+    return CVKeypoint(
+      x: (json['x'] as num?)?.toDouble() ?? 0.0,
+      y: (json['y'] as num?)?.toDouble() ?? 0.0,
+      z: (json['z'] as num?)?.toDouble(),
+      confidence: (json['confidence'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class CVFeatures {
+  final double torsoTiltDeg;
+  final double shoulderTiltDeg;
+  final double pelvisTiltDeg;
+  final double leftKneeAngleDeg;
+  final double rightKneeAngleDeg;
+  final double leftHipAngleDeg;
+  final double rightHipAngleDeg;
+  final double shoulderWidthRatio;
+  final double hipWidthRatio;
+  final double torsoLengthRatio;
+  final double legLengthRatio;
+  final double shoulderAsymmetry;
+  final double pelvisAsymmetry;
+
+  CVFeatures({
+    required this.torsoTiltDeg,
+    required this.shoulderTiltDeg,
+    required this.pelvisTiltDeg,
+    required this.leftKneeAngleDeg,
+    required this.rightKneeAngleDeg,
+    required this.leftHipAngleDeg,
+    required this.rightHipAngleDeg,
+    required this.shoulderWidthRatio,
+    required this.hipWidthRatio,
+    required this.torsoLengthRatio,
+    required this.legLengthRatio,
+    required this.shoulderAsymmetry,
+    required this.pelvisAsymmetry,
+  });
+
+  factory CVFeatures.fromJson(Map<String, dynamic> json) {
+    double getNum(String key) => (json[key] as num?)?.toDouble() ?? 0.0;
+
+    return CVFeatures(
+      torsoTiltDeg: getNum('torso_tilt_deg'),
+      shoulderTiltDeg: getNum('shoulder_tilt_deg'),
+      pelvisTiltDeg: getNum('pelvis_tilt_deg'),
+      leftKneeAngleDeg: getNum('left_knee_angle_deg'),
+      rightKneeAngleDeg: getNum('right_knee_angle_deg'),
+      leftHipAngleDeg: getNum('left_hip_angle_deg'),
+      rightHipAngleDeg: getNum('right_hip_angle_deg'),
+      shoulderWidthRatio: getNum('shoulder_width_ratio'),
+      hipWidthRatio: getNum('hip_width_ratio'),
+      torsoLengthRatio: getNum('torso_length_ratio'),
+      legLengthRatio: getNum('leg_length_ratio'),
+      shoulderAsymmetry: getNum('shoulder_asymmetry'),
+      pelvisAsymmetry: getNum('pelvis_asymmetry'),
+    );
+  }
+}
+
+class CVAnalysisResult {
+  final String status;
+  final CVQuality quality;
+  final Map<String, CVKeypoint> keypoints;
+  final CVFeatures features;
+  final List<String> warnings;
+
+  CVAnalysisResult({
+    required this.status,
+    required this.quality,
+    required this.keypoints,
+    required this.features,
+    required this.warnings,
+  });
+
+  factory CVAnalysisResult.fromJson(Map<String, dynamic> json) {
+    final keypointsJson = (json['keypoints'] as Map<String, dynamic>? ?? {});
+    final keypoints = keypointsJson.map(
+      (key, value) => MapEntry(
+        key,
+        CVKeypoint.fromJson(value as Map<String, dynamic>),
+      ),
+    );
+
+    return CVAnalysisResult(
+      status: (json['status'] ?? '').toString(),
+      quality: CVQuality.fromJson(json['quality'] as Map<String, dynamic>? ?? {}),
+      keypoints: keypoints,
+      features: CVFeatures.fromJson(json['features'] as Map<String, dynamic>? ?? {}),
+      warnings: (json['warnings'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
     );
   }
 }
@@ -89,7 +212,7 @@ class FirstScreen extends StatefulWidget {
 
 class _FirstScreenState extends State<FirstScreen> {
   static const String _apiBaseUrl = 'http://127.0.0.1:8000';
-  static const String _predictPath = '/predict';
+  static const String _predictPath = '/api/v1/cv/analyze';
 
   final _formKey = GlobalKey<FormState>();
   final _ageController = TextEditingController();
@@ -99,7 +222,7 @@ class _FirstScreenState extends State<FirstScreen> {
 
   bool _loading = false;
   String? _error;
-  PredictionResult? _result;
+  CVAnalysisResult? _result;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -136,32 +259,34 @@ class _FirstScreenState extends State<FirstScreen> {
       _error = null;
     });
   }
-  Future<PredictionResult> _predict({
+  Future<CVAnalysisResult> _predict({
     required File image,
     required String gender,
     required int age,
   }) async {
     final uri = Uri.parse('$_apiBaseUrl$_predictPath');
 
+    final ext = p.extension(image.path).toLowerCase();
+    final mediaType = ext == '.png'
+        ? MediaType('image', 'png')
+        : MediaType('image', 'jpeg');
+        
     final request = http.MultipartRequest('POST', uri)
       ..fields['gender'] = gender
       ..fields['age'] = age.toString()
-      ..files.add(await http.MultipartFile.fromPath('file', image.path));
+      ..files.add(await http.MultipartFile.fromPath('image', image.path, contentType: mediaType),);
 
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
 
     if (response.statusCode != 200) {
-      // Бекенд возвращает {"error": "..."} при исключении. :contentReference[oaicite:2]{index=2}
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      throw Exception(_extractApiError(response));
     }
 
-    final Map<String, dynamic> jsonBody = jsonDecode(response.body) as Map<String, dynamic>;
-    if (jsonBody.containsKey('error')) {
-      throw Exception(jsonBody['error'].toString());
-    }
+    final Map<String, dynamic> jsonBody =
+        jsonDecode(response.body) as Map<String, dynamic>;
 
-    return PredictionResult.fromJson(jsonBody);
+    return CVAnalysisResult.fromJson(jsonBody);
   }
 
   Future<void> _onSubmit() async {
@@ -183,7 +308,7 @@ class _FirstScreenState extends State<FirstScreen> {
       final res = await _predict(image: _imageFile!, gender: _gender, age: age);
       setState(() => _result = res);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = _humanizeError(e.toString()));
     } finally {
       setState(() => _loading = false);
     }
@@ -192,10 +317,7 @@ class _FirstScreenState extends State<FirstScreen> {
   void _goNext() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PlanScreenStub(
-          bmiCategory: _result?.bmiCategory ?? '',
-          confidence: _result?.confidence ?? 0.0,
-        ),
+        builder: (_) => PlanScreenStub(result: _result!),
       ),
     );
   }
@@ -242,41 +364,505 @@ class _FirstScreenState extends State<FirstScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Руководство пользователя'),
+          title: const Text('Справка по фотоанализу'),
           content: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const <Widget>[
-                Text('1. Инициализация:'),
-                Text('Введите базовые параметры и загрузите фото для оценки вашего физического состояния.'),
-                SizedBox(height: 10),
-                Text('2. Цель:'),
-                Text('Выберите цель.'),
-                SizedBox(height: 10),
-                Text('3. Результаты анализа:'),
-                Text('Ознакомтесь с информацией, полученной после анализа ваших параметров.'),
-                SizedBox(height: 10),
-                Text('4. План тренировок и диет:'),
-                Text('Ознакомтесь с составленным планом тренировок и диет.'),
-                SizedBox(height: 10),
-                Text('5. Прогресс:'),
-                Text('Следите за вашим прогрессом к своей цели.'),
+              children: const [
+                Text(
+                  'Требования к фотографии',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                SizedBox(height: 8),
+                Text('• Фото должно быть в полный рост.'),
+                Text('• Поза — стоя, в естественном положении, без сильного наклона.'),
+                Text('• Камера должна быть расположена напротив человека.'),
+                Text('• Желательно, чтобы в кадре были полностью видны плечи, таз, колени и стопы.'),
+                Text('• Освещение должно быть ровным, без сильных теней и пересветов.'),
+                Text('• Одежда не должна полностью скрывать контуры тела.'),
+                Text('• В кадре не должно быть крупных посторонних объектов, перекрывающих тело.'),
+
+                SizedBox(height: 16),
+                Text(
+                  'Что означают показатели анализа',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Качество фото — интегральная оценка пригодности снимка для анализа позы.',
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Средняя уверенность keypoints — средняя уверенность модели в корректности найденных ключевых точек тела '
+                  '(например, плеч, таза, коленей). Чем выше значение, тем надежнее распознавание.',
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Тело найдено — модель обнаружила человека на изображении.',
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Тело полностью в кадре — основные анатомические ориентиры присутствуют в поле зрения камеры.',
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Наклон корпуса, плеч и таза — геометрические признаки, отражающие возможную асимметрию положения тела.',
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Углы коленей — расчетные суставные углы, используемые для оценки положения нижних конечностей.',
+                ),
+
+                SizedBox(height: 16),
+                Text(
+                  'Ограничения',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Результат предназначен для предварительной цифровой оценки и не заменяет консультацию врача или тренера.',
+                ),
               ],
             ),
           ),
-          actions: <Widget>[
+          actions: [
             TextButton(
+              onPressed: () => Navigator.of(context).pop(),
               child: const Text('Закрыть'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
             ),
           ],
         );
       },
     );
   }
+  String _yesNo(bool value) => value ? 'Да' : 'Нет';
 
+  String _asPercent(double value) => '${(value * 100).toStringAsFixed(0)}%';
+
+  String _qualityLabel(double score) {
+    if (score >= 0.85) return 'Высокое';
+    if (score >= 0.70) return 'Хорошее';
+    if (score >= 0.55) return 'Приемлемое';
+    return 'Низкое';
+  }
+  String _extractApiError(http.Response response) {
+    try {
+      final body = jsonDecode(response.body);
+
+      if (body is Map<String, dynamic>) {
+        final detail = body['detail']?.toString().trim();
+        if (detail != null && detail.isNotEmpty) {
+          return _humanizeError(detail);
+        }
+
+        final error = body['error']?.toString().trim();
+        if (error != null && error.isNotEmpty) {
+          return _humanizeError(error);
+        }
+      }
+    } catch (_) {}
+
+    if (response.statusCode >= 500) {
+      return 'На сервере произошла внутренняя ошибка. Повторите попытку позже.';
+    }
+
+    return 'Не удалось выполнить анализ фотографии.';
+  }
+
+  String _humanizeError(String message) {
+    final raw = message.replaceFirst('Exception: ', '').trim();
+
+    if (raw.contains('Часть обязательных ключевых точек') ||
+        raw.contains('Требуется фронтальная фотография')) {
+      return 'Не удалось надежно определить ключевые точки тела. '
+          'Загрузите фронтальную фотографию в полный рост, где полностью видны '
+          'плечи, таз, колени и голеностоп.';
+    }
+
+    if (raw.contains('SocketException') ||
+        raw.contains('Connection refused') ||
+        raw.contains('Failed host lookup')) {
+      return 'Не удалось подключиться к серверу анализа. '
+          'Проверьте, что backend запущен и доступен.';
+    }
+
+    return raw;
+  }
+  Color _qualityColor(BuildContext context, double score) {
+    if (score >= 0.85) return Colors.green.shade700;
+    if (score >= 0.70) return Colors.teal.shade700;
+    if (score >= 0.55) return Colors.orange.shade700;
+    return Theme.of(context).colorScheme.error;
+  }
+
+  Widget _buildInfoChip({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? color,
+  }) {
+    final chipColor = color ?? Theme.of(context).colorScheme.primary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: chipColor.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: chipColor.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: chipColor),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.black54,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricTile({
+    required BuildContext context,
+    required String label,
+    required String value,
+    IconData icon = Icons.straighten_rounded,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+    );
+  }
+  Widget _buildErrorCard(String message) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.errorContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: cs.error.withValues(alpha: 0.20),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.error.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.error_outline_rounded,
+                  color: cs.error,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Не удалось выполнить анализ',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      message,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            height: 1.35,
+                            color: cs.onSurface.withValues(alpha: 0.85),
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Рекомендации к фото',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                const Text('• Используйте фронтальное фото в полный рост.'),
+                const SizedBox(height: 4),
+                const Text('• В кадре должны быть видны плечи, таз, колени и голеностоп.'),
+                const SizedBox(height: 4),
+                const Text('• Не допускайте перекрытия тела руками, одеждой или посторонними объектами.'),
+                const SizedBox(height: 4),
+                const Text('• Желательно ровное освещение и нейтральный фон.'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  Widget _buildAnalysisResultCard(CVAnalysisResult result) {
+    final qualityColor = _qualityColor(context, result.quality.photoQualityScore);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.analytics_outlined, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Результаты анализа фото',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Анализ выполнен',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          _buildSectionTitle(context, 'Общий итог'),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context: context,
+                icon: result.quality.bodyDetected ? Icons.check_circle : Icons.cancel,
+                label: 'Тело обнаружено',
+                value: _yesNo(result.quality.bodyDetected),
+                color: result.quality.bodyDetected ? Colors.green.shade700 : Colors.red.shade700,
+              ),
+              _buildInfoChip(
+                context: context,
+                icon: result.quality.bodyFullyVisible ? Icons.crop_free : Icons.crop,
+                label: 'Полнота кадра',
+                value: _yesNo(result.quality.bodyFullyVisible),
+                color: result.quality.bodyFullyVisible ? Colors.teal.shade700 : Colors.orange.shade700,
+              ),
+              _buildInfoChip(
+                context: context,
+                icon: Icons.insert_photo_outlined,
+                label: 'Качество фото',
+                value: _qualityLabel(result.quality.photoQualityScore),
+                color: qualityColor,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+          _buildSectionTitle(context, 'Качество распознавания'),
+          Column(
+            children: [
+              _buildMetricTile(
+                context: context,
+                label: 'Интегральная оценка качества',
+                value: _asPercent(result.quality.photoQualityScore),
+                icon: Icons.verified_outlined,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'Средняя уверенность keypoints',
+                value: _asPercent(result.quality.keypointConfidenceMean),
+                icon: Icons.center_focus_strong,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'Видимые ключевые точки',
+                value: _asPercent(result.quality.visibleKeypointsRatio),
+                icon: Icons.accessibility_new_rounded,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+          _buildSectionTitle(context, 'Геометрические признаки'),
+          Column(
+            children: [
+              _buildMetricTile(
+                context: context,
+                label: 'Наклон корпуса',
+                value: '${result.features.torsoTiltDeg.toStringAsFixed(1)}°',
+                icon: Icons.accessibility_rounded,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'Наклон плеч',
+                value: '${result.features.shoulderTiltDeg.toStringAsFixed(1)}°',
+                icon: Icons.height_rounded,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'Наклон таза',
+                value: '${result.features.pelvisTiltDeg.toStringAsFixed(1)}°',
+                icon: Icons.straighten_rounded,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'Угол левого колена',
+                value: '${result.features.leftKneeAngleDeg.toStringAsFixed(1)}°',
+                icon: Icons.timeline_rounded,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'Угол правого колена',
+                value: '${result.features.rightKneeAngleDeg.toStringAsFixed(1)}°',
+                icon: Icons.timeline_rounded,
+              ),
+            ],
+          ),
+
+          if (result.warnings.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            _buildSectionTitle(context, 'Предупреждения'),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: result.warnings
+                    .map(
+                      (w) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(w)),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     final canProceed = _result != null && !_loading;
@@ -314,7 +900,7 @@ class _FirstScreenState extends State<FirstScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: IconButton(
-              tooltip: 'Руководство',
+              tooltip: 'Справка',
               icon: const Icon(Icons.help_outline_rounded),
               onPressed: _showUserGuide,
             ),
@@ -385,7 +971,7 @@ class _FirstScreenState extends State<FirstScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Персональная оценка',
+                              'Фото для анализа осанки и пропорций',
                               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w700,
@@ -393,21 +979,14 @@ class _FirstScreenState extends State<FirstScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Укажите пол, возраст и фото для оценки BMI и персонализации рекомендаций.',
+                              'Загрузите фотографию в полный рост: человек должен стоять прямо, лицом к камере, '
+                              'на снимке должны быть видны плечи, таз, колени и голеностоп.',
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     color: Colors.white.withValues(alpha: 0.95),
                                     height: 1.35,
                                   ),
                             ),
                           ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _showBmiInfo,
-                        tooltip: 'Подробнее',
-                        icon: const Icon(
-                          Icons.info_outline,
-                          color: Colors.white,
                         ),
                       ),
                     ],
@@ -490,7 +1069,18 @@ class _FirstScreenState extends State<FirstScreen> {
                         const SizedBox(height: 12),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.file(_imageFile!, height: 220, fit: BoxFit.cover),
+                          child: Container(
+                            width: double.infinity,
+                            constraints: const BoxConstraints(
+                              minHeight: 220,
+                              maxHeight: 420,
+                            ),
+                            color: Colors.black.withValues(alpha: 0.04),
+                            child: Image.file(
+                              _imageFile!,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
                         ),
                       ],
 
@@ -504,36 +1094,17 @@ class _FirstScreenState extends State<FirstScreen> {
                                 width: 18,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : const Text('Рассчитать категорию BMI'),
+                            : const Text('Проанализировать фото'),
                       ),
 
                       if (_error != null) ...[
                         const SizedBox(height: 12),
-                        Text(
-                          _error!,
-                          style: TextStyle(color: Theme.of(context).colorScheme.error),
-                        ),
+                        _buildErrorCard(_error!),
                       ],
 
                       if (_result != null) ...[
                         const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Результат:',
-                                  style: Theme.of(context).textTheme.titleMedium),
-                              const SizedBox(height: 6),
-                              Text('Категория BMI: ${_result!.bmiCategory}'),
-                              Text('Достоверность (max prob): ${_result!.confidence.toStringAsFixed(3)}'),
-                            ],
-                          ),
-                        ),
+                        _buildAnalysisResultCard(_result!),
                         const SizedBox(height: 12),
                         FilledButton.tonal(
                           onPressed: canProceed ? _goNext : null,
@@ -553,26 +1124,27 @@ class _FirstScreenState extends State<FirstScreen> {
 }
 
 class PlanScreenStub extends StatelessWidget {
-  final String bmiCategory;
-  final double confidence;
+  final CVAnalysisResult result;
 
   const PlanScreenStub({
     super.key,
-    required this.bmiCategory,
-    required this.confidence,
+    required this.result,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('План')),
+      appBar: AppBar(title: const Text('План (заглушка)')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Text(
           'Далее предполагается генерация персонализированного плана тренировок и питания.\n\n'
           'Входные признаки:\n'
-          '- BMI категория: $bmiCategory\n'
-          '- confidence: ${confidence.toStringAsFixed(3)}',
+          '- photo_quality_score: ${result.quality.photoQualityScore.toStringAsFixed(3)}\n'
+          '- keypoint_confidence_mean: ${result.quality.keypointConfidenceMean.toStringAsFixed(3)}\n'
+          '- torso_tilt_deg: ${result.features.torsoTiltDeg.toStringAsFixed(2)}\n'
+          '- shoulder_tilt_deg: ${result.features.shoulderTiltDeg.toStringAsFixed(2)}\n'
+          '- pelvis_tilt_deg: ${result.features.pelvisTiltDeg.toStringAsFixed(2)}',
         ),
       ),
     );
