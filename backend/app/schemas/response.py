@@ -41,3 +41,51 @@ class CVAnalysisResponse(BaseModel):
     features: FeatureSet
     warnings: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class Questionnaire(BaseModel):
+    gender: str
+    age: int = Field(..., ge=10, le=100)
+    height_cm: float = Field(..., gt=100.0, le=250.0)
+    weight_kg: float = Field(..., gt=25.0, le=300.0)
+    goal: str = Field(..., description="fat_loss | maintenance | muscle_gain | recomposition")
+    experience_level: str = Field(default="beginner", description="beginner | intermediate | advanced")
+
+
+class SurrogateInput(BaseModel):
+    Lx: float = Field(..., ge=0.5, le=1.5)
+    Ly: float = Field(..., ge=0.1, le=0.4)
+    Lz: float = Field(..., ge=0.1, le=0.4)
+    E: float = Field(..., ge=5e4, le=5e5)
+    nu: float = Field(..., ge=0.2, le=0.45)
+    tx: float = Field(..., ge=100.0, le=5000.0)
+    ty: float = 0.0
+    tz: float = 0.0
+
+
+class SurrogateOutput(BaseModel):
+    umax: float
+    U: float
+    sigmavm_max: float
+    Rx: float
+
+
+class SurrogateInterpretation(BaseModel):
+    load_score: int = Field(..., ge=0, le=100)
+    level: str
+    summary: str
+    progression_hint: str
+
+
+class SurrogatePredictRequest(BaseModel):
+    questionnaire: Questionnaire
+    features: FeatureSet
+
+
+class SurrogatePredictionResponse(BaseModel):
+    status: str
+    surrogate_input: SurrogateInput
+    prediction: SurrogateOutput
+    interpretation: SurrogateInterpretation
+    warnings: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)

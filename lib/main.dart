@@ -203,6 +203,131 @@ class CVAnalysisResult {
   }
 }
 
+
+
+class SurrogateInputData {
+  final double lx;
+  final double ly;
+  final double lz;
+  final double e;
+  final double nu;
+  final double tx;
+  final double ty;
+  final double tz;
+
+  SurrogateInputData({
+    required this.lx,
+    required this.ly,
+    required this.lz,
+    required this.e,
+    required this.nu,
+    required this.tx,
+    required this.ty,
+    required this.tz,
+  });
+
+  factory SurrogateInputData.fromJson(Map<String, dynamic> json) {
+    double getNum(String key) => (json[key] as num?)?.toDouble() ?? 0.0;
+
+    return SurrogateInputData(
+      lx: getNum('Lx'),
+      ly: getNum('Ly'),
+      lz: getNum('Lz'),
+      e: getNum('E'),
+      nu: getNum('nu'),
+      tx: getNum('tx'),
+      ty: getNum('ty'),
+      tz: getNum('tz'),
+    );
+  }
+}
+
+class SurrogatePredictionData {
+  final double umax;
+  final double u;
+  final double sigmavmMax;
+  final double rx;
+
+  SurrogatePredictionData({
+    required this.umax,
+    required this.u,
+    required this.sigmavmMax,
+    required this.rx,
+  });
+
+  factory SurrogatePredictionData.fromJson(Map<String, dynamic> json) {
+    double getNum(String key) => (json[key] as num?)?.toDouble() ?? 0.0;
+
+    return SurrogatePredictionData(
+      umax: getNum('umax'),
+      u: getNum('U'),
+      sigmavmMax: getNum('sigmavm_max'),
+      rx: getNum('Rx'),
+    );
+  }
+}
+
+class SurrogateInterpretationData {
+  final int loadScore;
+  final String level;
+  final String summary;
+  final String progressionHint;
+
+  SurrogateInterpretationData({
+    required this.loadScore,
+    required this.level,
+    required this.summary,
+    required this.progressionHint,
+  });
+
+  factory SurrogateInterpretationData.fromJson(Map<String, dynamic> json) {
+    return SurrogateInterpretationData(
+      loadScore: (json['load_score'] as num?)?.toInt() ?? 0,
+      level: (json['level'] ?? '').toString(),
+      summary: (json['summary'] ?? '').toString(),
+      progressionHint: (json['progression_hint'] ?? '').toString(),
+    );
+  }
+}
+
+class SurrogateResult {
+  final String status;
+  final SurrogateInputData surrogateInput;
+  final SurrogatePredictionData prediction;
+  final SurrogateInterpretationData interpretation;
+  final List<String> warnings;
+  final Map<String, dynamic> metadata;
+
+  SurrogateResult({
+    required this.status,
+    required this.surrogateInput,
+    required this.prediction,
+    required this.interpretation,
+    required this.warnings,
+    required this.metadata,
+  });
+
+  factory SurrogateResult.fromJson(Map<String, dynamic> json) {
+    return SurrogateResult(
+      status: (json['status'] ?? '').toString(),
+      surrogateInput: SurrogateInputData.fromJson(
+        json['surrogate_input'] as Map<String, dynamic>? ?? {},
+      ),
+      prediction: SurrogatePredictionData.fromJson(
+        json['prediction'] as Map<String, dynamic>? ?? {},
+      ),
+      interpretation: SurrogateInterpretationData.fromJson(
+        json['interpretation'] as Map<String, dynamic>? ?? {},
+      ),
+      warnings: (json['warnings'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+      metadata: Map<String, dynamic>.from(
+        json['metadata'] as Map<String, dynamic>? ?? {},
+      ),
+    );
+  }
+}
 class FirstScreen extends StatefulWidget {
   const FirstScreen({super.key});
 
@@ -213,22 +338,31 @@ class FirstScreen extends StatefulWidget {
 class _FirstScreenState extends State<FirstScreen> {
   static const String _apiBaseUrl = 'http://127.0.0.1:8000';
   static const String _predictPath = '/api/v1/cv/analyze';
+  static const String _surrogatePath = '/api/v1/surrogate/predict';
 
   final _formKey = GlobalKey<FormState>();
   final _ageController = TextEditingController();
+  final _heightController = TextEditingController();
+  final _weightController = TextEditingController();
 
   String _gender = 'female'; // ожидается 'female' или 'male'
+  String _goal = 'muscle_gain';
+  String _experienceLevel = 'beginner';
   File? _imageFile;
 
   bool _loading = false;
   String? _error;
   CVAnalysisResult? _result;
+  SurrogateResult? _surrogateResult;
+  String? _surrogateError;
 
   final ImagePicker _picker = ImagePicker();
 
   @override
   void dispose() {
     _ageController.dispose();
+    _heightController.dispose();
+    _weightController.dispose();
     super.dispose();
   }
 
@@ -236,6 +370,8 @@ class _FirstScreenState extends State<FirstScreen> {
     setState(() {
       _error = null;
       _result = null;
+      _surrogateResult = null;
+      _surrogateError = null;
     });
 
     final XFile? xfile = await _picker.pickImage(
@@ -256,10 +392,12 @@ class _FirstScreenState extends State<FirstScreen> {
 
       // Чтобы результат не “оставался” от предыдущего фото
       _result = null;
+      _surrogateResult = null;
+      _surrogateError = null;
       _error = null;
     });
   }
-  Future<CVAnalysisResult> _predict({
+  Future<CVAnalysisResult> _predictCv({
     required File image,
     required String gender,
     required int age,
@@ -286,13 +424,67 @@ class _FirstScreenState extends State<FirstScreen> {
     final Map<String, dynamic> jsonBody =
         jsonDecode(response.body) as Map<String, dynamic>;
 
+
     return CVAnalysisResult.fromJson(jsonBody);
+  }
+
+  Future<SurrogateResult> _predictSurrogate({
+    required CVFeatures features,
+    required String gender,
+    required int age,
+    required double heightCm,
+    required double weightKg,
+    required String goal,
+    required String experienceLevel,
+  }) async {
+    final uri = Uri.parse('$_apiBaseUrl$_surrogatePath');
+
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'questionnaire': {
+          'gender': gender,
+          'age': age,
+          'height_cm': heightCm,
+          'weight_kg': weightKg,
+          'goal': goal,
+          'experience_level': experienceLevel,
+        },
+        'features': {
+          'torso_tilt_deg': features.torsoTiltDeg,
+          'shoulder_tilt_deg': features.shoulderTiltDeg,
+          'pelvis_tilt_deg': features.pelvisTiltDeg,
+          'left_knee_angle_deg': features.leftKneeAngleDeg,
+          'right_knee_angle_deg': features.rightKneeAngleDeg,
+          'left_hip_angle_deg': features.leftHipAngleDeg,
+          'right_hip_angle_deg': features.rightHipAngleDeg,
+          'shoulder_width_ratio': features.shoulderWidthRatio,
+          'hip_width_ratio': features.hipWidthRatio,
+          'torso_length_ratio': features.torsoLengthRatio,
+          'leg_length_ratio': features.legLengthRatio,
+          'shoulder_asymmetry': features.shoulderAsymmetry,
+          'pelvis_asymmetry': features.pelvisAsymmetry,
+        },
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractApiError(response));
+    }
+
+    final Map<String, dynamic> jsonBody =
+        jsonDecode(response.body) as Map<String, dynamic>;
+
+    return SurrogateResult.fromJson(jsonBody);
   }
 
   Future<void> _onSubmit() async {
     setState(() {
       _error = null;
       _result = null;
+      _surrogateResult = null;
+      _surrogateError = null;
     });
 
     if (!_formKey.currentState!.validate()) return;
@@ -302,11 +494,28 @@ class _FirstScreenState extends State<FirstScreen> {
     }
 
     final int age = int.parse(_ageController.text.trim());
+    final double heightCm = double.parse(_heightController.text.trim().replaceAll(',', '.'));
+    final double weightKg = double.parse(_weightController.text.trim().replaceAll(',', '.'));
 
     setState(() => _loading = true);
     try {
-      final res = await _predict(image: _imageFile!, gender: _gender, age: age);
-      setState(() => _result = res);
+      final cvRes = await _predictCv(image: _imageFile!, gender: _gender, age: age);
+      setState(() => _result = cvRes);
+
+      try {
+        final surrogateRes = await _predictSurrogate(
+          features: cvRes.features,
+          gender: _gender,
+          age: age,
+          heightCm: heightCm,
+          weightKg: weightKg,
+          goal: _goal,
+          experienceLevel: _experienceLevel,
+        );
+        setState(() => _surrogateResult = surrogateRes);
+      } catch (e) {
+        setState(() => _surrogateError = _humanizeError(e.toString()));
+      }
     } catch (e) {
       setState(() => _error = _humanizeError(e.toString()));
     } finally {
@@ -317,7 +526,10 @@ class _FirstScreenState extends State<FirstScreen> {
   void _goNext() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PlanScreenStub(result: _result!),
+        builder: (_) => PlanScreenStub(
+          result: _result!,
+          surrogateResult: _surrogateResult,
+        ),
       ),
     );
   }
@@ -445,6 +657,58 @@ class _FirstScreenState extends State<FirstScreen> {
     if (score >= 0.55) return 'Приемлемое';
     return 'Низкое';
   }
+
+  String _goalLabel(String goal) {
+    switch (goal) {
+      case 'fat_loss':
+        return 'Снижение жировой массы';
+      case 'maintenance':
+        return 'Поддержание формы';
+      case 'recomposition':
+        return 'Рекомпозиция';
+      case 'muscle_gain':
+      default:
+        return 'Набор мышечной массы';
+    }
+  }
+
+  String _experienceLabel(String level) {
+    switch (level) {
+      case 'intermediate':
+        return 'Средний';
+      case 'advanced':
+        return 'Продвинутый';
+      case 'beginner':
+      default:
+        return 'Начальный';
+    }
+  }
+
+  String _surrogateLevelLabel(String level) {
+    switch (level) {
+      case 'low':
+        return 'Низкий';
+      case 'moderate':
+        return 'Умеренный';
+      case 'high':
+        return 'Высокий';
+      default:
+        return level;
+    }
+  }
+
+  Color _loadScoreColor(BuildContext context, int score) {
+    if (score < 35) return Colors.green.shade700;
+    if (score < 70) return Colors.orange.shade700;
+    return Theme.of(context).colorScheme.error;
+  }
+
+  String _formatCompact(double value) {
+    if (value.abs() >= 1000) return value.toStringAsFixed(0);
+    if (value.abs() >= 10) return value.toStringAsFixed(2);
+    return value.toStringAsFixed(4);
+  }
+
   String _extractApiError(http.Response response) {
     try {
       final body = jsonDecode(response.body);
@@ -863,9 +1127,293 @@ class _FirstScreenState extends State<FirstScreen> {
       ),
     );
   }
+
+  Widget _buildSurrogateErrorCard(String message) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.psychology_alt_outlined, color: Colors.orange, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Суррогатная оценка недоступна',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        height: 1.35,
+                        color: cs.onSurface.withValues(alpha: 0.82),
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSurrogateResultCard(SurrogateResult result) {
+    final scoreColor = _loadScoreColor(context, result.interpretation.loadScore);
+    final stubMode = result.metadata['stub_mode'] == true;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.psychology_alt_outlined, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Суррогатная биомеханическая оценка',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: scoreColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _surrogateLevelLabel(result.interpretation.level),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scoreColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          _buildSectionTitle(context, 'Общий итог'),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildInfoChip(
+                context: context,
+                icon: Icons.speed_rounded,
+                label: 'Индекс нагрузки',
+                value: '${result.interpretation.loadScore}/100',
+                color: scoreColor,
+              ),
+              _buildInfoChip(
+                context: context,
+                icon: Icons.flag_outlined,
+                label: 'Цель',
+                value: _goalLabel(_goal),
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              _buildInfoChip(
+                context: context,
+                icon: Icons.fitness_center_outlined,
+                label: 'Уровень',
+                value: _experienceLabel(_experienceLevel),
+                color: Colors.teal.shade700,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+          _buildSectionTitle(context, 'Прогноз суррогатной модели'),
+          Column(
+            children: [
+              _buildMetricTile(
+                context: context,
+                label: 'Максимальное перемещение (umax)',
+                value: _formatCompact(result.prediction.umax),
+                icon: Icons.swap_vert_circle_outlined,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'Энергетический отклик (U)',
+                value: _formatCompact(result.prediction.u),
+                icon: Icons.bolt_outlined,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'Максимум σvm',
+                value: _formatCompact(result.prediction.sigmavmMax),
+                icon: Icons.show_chart_rounded,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'Опорная реакция Rx',
+                value: _formatCompact(result.prediction.rx),
+                icon: Icons.compare_arrows_rounded,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+          _buildSectionTitle(context, 'Входы суррогата'),
+          Column(
+            children: [
+              _buildMetricTile(
+                context: context,
+                label: 'Lx',
+                value: _formatCompact(result.surrogateInput.lx),
+                icon: Icons.straighten_rounded,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'Ly',
+                value: _formatCompact(result.surrogateInput.ly),
+                icon: Icons.straighten_rounded,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'Lz',
+                value: _formatCompact(result.surrogateInput.lz),
+                icon: Icons.straighten_rounded,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'E',
+                value: _formatCompact(result.surrogateInput.e),
+                icon: Icons.layers_outlined,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'ν',
+                value: _formatCompact(result.surrogateInput.nu),
+                icon: Icons.tune_rounded,
+              ),
+              const SizedBox(height: 8),
+              _buildMetricTile(
+                context: context,
+                label: 'tx',
+                value: _formatCompact(result.surrogateInput.tx),
+                icon: Icons.arrow_forward_rounded,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+          _buildSectionTitle(context, 'Интерпретация'),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: scoreColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: scoreColor.withValues(alpha: 0.20)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  result.interpretation.summary,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Рекомендация по прогрессии',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  result.interpretation.progressionHint,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
+                ),
+              ],
+            ),
+          ),
+
+          if (stubMode || result.warnings.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            _buildSectionTitle(context, 'Замечания'),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (stubMode)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        'Активен stub-режим: значения рассчитаны без реальных артефактов обученной модели.',
+                      ),
+                    ),
+                  ...result.warnings.map(
+                    (w) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 2),
+                            child: Icon(Icons.info_outline_rounded, size: 18, color: Colors.orange),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(w)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final canProceed = _result != null && !_loading;
+    final canProceed = _result != null && _surrogateResult != null && !_loading;
 
     return Scaffold(
       appBar: AppBar(
@@ -1031,9 +1579,99 @@ class _FirstScreenState extends State<FirstScreen> {
                           if (s.isEmpty) return 'Укажите возраст.';
                           final age = int.tryParse(s);
                           if (age == null) return 'Возраст должен быть целым числом.';
-                          if (age < 5 || age > 120) return 'Возраст вне допустимого диапазона.';
+                          if (age < 10 || age > 100) return 'Возраст вне допустимого диапазона.';
                           return null;
                         },
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: _heightController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Рост, см',
+                          hintText: 'Например: 170',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (v) {
+                          final s = (v ?? '').trim().replaceAll(',', '.');
+                          if (s.isEmpty) return 'Укажите рост.';
+                          final height = double.tryParse(s);
+                          if (height == null) return 'Рост должен быть числом.';
+                          if (height <= 100 || height > 250) return 'Рост вне допустимого диапазона.';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: _weightController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Вес, кг',
+                          hintText: 'Например: 65',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (v) {
+                          final s = (v ?? '').trim().replaceAll(',', '.');
+                          if (s.isEmpty) return 'Укажите вес.';
+                          final weight = double.tryParse(s);
+                          if (weight == null) return 'Вес должен быть числом.';
+                          if (weight <= 25 || weight > 300) return 'Вес вне допустимого диапазона.';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      DropdownButtonFormField<String>(
+                        initialValue: _goal,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'muscle_gain',
+                            child: Text('Набор мышечной массы'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'fat_loss',
+                            child: Text('Снижение жировой массы'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'maintenance',
+                            child: Text('Поддержание формы'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'recomposition',
+                            child: Text('Рекомпозиция'),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() => _goal = v ?? 'muscle_gain'),
+                        decoration: const InputDecoration(
+                          labelText: 'Цель',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      DropdownButtonFormField<String>(
+                        initialValue: _experienceLevel,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'beginner',
+                            child: Text('Начальный'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'intermediate',
+                            child: Text('Средний'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'advanced',
+                            child: Text('Продвинутый'),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() => _experienceLevel = v ?? 'beginner'),
+                        decoration: const InputDecoration(
+                          labelText: 'Уровень подготовки',
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                       const SizedBox(height: 12),
 
@@ -1105,6 +1743,16 @@ class _FirstScreenState extends State<FirstScreen> {
                       if (_result != null) ...[
                         const SizedBox(height: 16),
                         _buildAnalysisResultCard(_result!),
+                      ],
+
+                      if (_surrogateError != null) ...[
+                        const SizedBox(height: 12),
+                        _buildSurrogateErrorCard(_surrogateError!),
+                      ],
+
+                      if (_surrogateResult != null) ...[
+                        const SizedBox(height: 12),
+                        _buildSurrogateResultCard(_surrogateResult!),
                         const SizedBox(height: 12),
                         FilledButton.tonal(
                           onPressed: canProceed ? _goNext : null,
@@ -1125,26 +1773,36 @@ class _FirstScreenState extends State<FirstScreen> {
 
 class PlanScreenStub extends StatelessWidget {
   final CVAnalysisResult result;
+  final SurrogateResult? surrogateResult;
 
   const PlanScreenStub({
     super.key,
     required this.result,
+    required this.surrogateResult,
   });
 
   @override
   Widget build(BuildContext context) {
+    final surrogate = surrogateResult;
+
     return Scaffold(
       appBar: AppBar(title: const Text('План (заглушка)')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Text(
           'Далее предполагается генерация персонализированного плана тренировок и питания.\n\n'
-          'Входные признаки:\n'
+          'CV-признаки:\n'
           '- photo_quality_score: ${result.quality.photoQualityScore.toStringAsFixed(3)}\n'
           '- keypoint_confidence_mean: ${result.quality.keypointConfidenceMean.toStringAsFixed(3)}\n'
           '- torso_tilt_deg: ${result.features.torsoTiltDeg.toStringAsFixed(2)}\n'
           '- shoulder_tilt_deg: ${result.features.shoulderTiltDeg.toStringAsFixed(2)}\n'
-          '- pelvis_tilt_deg: ${result.features.pelvisTiltDeg.toStringAsFixed(2)}',
+          '- pelvis_tilt_deg: ${result.features.pelvisTiltDeg.toStringAsFixed(2)}\n\n'
+          'Суррогатная оценка:\n'
+          '- load_score: ${surrogate?.interpretation.loadScore ?? 0}\n'
+          '- level: ${surrogate?.interpretation.level ?? '-'}\n'
+          '- umax: ${surrogate != null ? surrogate.prediction.umax.toStringAsFixed(4) : '-'}\n'
+          '- U: ${surrogate != null ? surrogate.prediction.u.toStringAsFixed(4) : '-'}\n'
+          '- sigmavm_max: ${surrogate != null ? surrogate.prediction.sigmavmMax.toStringAsFixed(4) : '-'}',
         ),
       ),
     );

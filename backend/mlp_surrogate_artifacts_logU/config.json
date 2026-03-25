@@ -1,0 +1,29 @@
+{
+  "input_cols": [
+    "Lx",
+    "Ly",
+    "Lz",
+    "E",
+    "nu",
+    "tx",
+    "ty",
+    "tz"
+  ],
+  "target_cols": [
+    "umax",
+    "U",
+    "sigmavm_max",
+    "Rx"
+  ],
+  "log1p_targets": [
+    "U"
+  ],
+  "seed": 42,
+  "batch_size": 64,
+  "epochs": 500,
+  "lr": 0.001,
+  "weight_decay": 1e-05,
+  "device": "cpu",
+  "best_val_loss": 0.0008186128397937864,
+  "test_loss_scaled": 0.001261626137420535
+}
