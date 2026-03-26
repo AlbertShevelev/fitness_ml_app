@@ -269,20 +269,27 @@ class SurrogatePredictionData {
 
 class SurrogateInterpretationData {
   final int loadScore;
+  final int stimulusScore;
+  final int riskScore;
   final String level;
   final String summary;
   final String progressionHint;
 
   SurrogateInterpretationData({
     required this.loadScore,
+    required this.stimulusScore,
+    required this.riskScore,
     required this.level,
     required this.summary,
     required this.progressionHint,
   });
 
   factory SurrogateInterpretationData.fromJson(Map<String, dynamic> json) {
+    final loadScore = (json['load_score'] as num?)?.toInt() ?? 0;
     return SurrogateInterpretationData(
-      loadScore: (json['load_score'] as num?)?.toInt() ?? 0,
+      loadScore: loadScore,
+      stimulusScore: (json['stimulus_score'] as num?)?.toInt() ?? loadScore,
+      riskScore: (json['risk_score'] as num?)?.toInt() ?? 50,
       level: (json['level'] ?? '').toString(),
       summary: (json['summary'] ?? '').toString(),
       progressionHint: (json['progression_hint'] ?? '').toString(),
@@ -514,10 +521,13 @@ class _FirstScreenState extends State<FirstScreen> {
   final _ageController = TextEditingController();
   final _heightController = TextEditingController();
   final _weightController = TextEditingController();
+  final _trainingYearsController = TextEditingController(text: '0');
+  final _weeklySessionsController = TextEditingController(text: '3');
 
   String _gender = 'female'; // ожидается 'female' или 'male'
   String _goal = 'muscle_gain';
   String _experienceLevel = 'beginner';
+  String _athleteClass = 'general';
   File? _imageFile;
 
   bool _loading = false;
@@ -535,6 +545,8 @@ class _FirstScreenState extends State<FirstScreen> {
     _ageController.dispose();
     _heightController.dispose();
     _weightController.dispose();
+    _trainingYearsController.dispose();
+    _weeklySessionsController.dispose();
     super.dispose();
   }
 
@@ -612,6 +624,9 @@ class _FirstScreenState extends State<FirstScreen> {
     required double weightKg,
     required String goal,
     required String experienceLevel,
+    required double trainingYears,
+    required int weeklySessions,
+    required String athleteClass,
   }) async {
     final uri = Uri.parse('$_apiBaseUrl$_surrogatePath');
 
@@ -626,6 +641,9 @@ class _FirstScreenState extends State<FirstScreen> {
           'weight_kg': weightKg,
           'goal': goal,
           'experience_level': experienceLevel,
+          'training_years': trainingYears,
+          'weekly_sessions': weeklySessions,
+          'athlete_class': athleteClass,
         },
         'features': {
           'torso_tilt_deg': features.torsoTiltDeg,
@@ -660,6 +678,9 @@ class _FirstScreenState extends State<FirstScreen> {
     required int age,
     required double heightCm,
     required double weightKg,
+    required double trainingYears,
+    required int weeklySessions,
+    required String athleteClass,
     required SurrogateResult surrogate,
   }) async {
     final uri = Uri.parse('$_apiBaseUrl$_recommendationPath');
@@ -675,6 +696,9 @@ class _FirstScreenState extends State<FirstScreen> {
           'weight_kg': weightKg,
           'goal': _goal,
           'experience_level': _experienceLevel,
+          'training_years': trainingYears,
+          'weekly_sessions': weeklySessions,
+          'athlete_class': athleteClass,
         },
         'surrogate_prediction': {
           'umax': surrogate.prediction.umax,
@@ -684,6 +708,8 @@ class _FirstScreenState extends State<FirstScreen> {
         },
         'surrogate_interpretation': {
           'load_score': surrogate.interpretation.loadScore,
+          'stimulus_score': surrogate.interpretation.stimulusScore,
+          'risk_score': surrogate.interpretation.riskScore,
           'level': surrogate.interpretation.level,
           'summary': surrogate.interpretation.summary,
           'progression_hint': surrogate.interpretation.progressionHint,
@@ -720,6 +746,8 @@ class _FirstScreenState extends State<FirstScreen> {
     final int age = int.parse(_ageController.text.trim());
     final double heightCm = double.parse(_heightController.text.trim().replaceAll(',', '.'));
     final double weightKg = double.parse(_weightController.text.trim().replaceAll(',', '.'));
+    final double trainingYears = double.parse(_trainingYearsController.text.trim().replaceAll(',', '.'));
+    final int weeklySessions = int.parse(_weeklySessionsController.text.trim());
 
     setState(() => _loading = true);
     try {
@@ -735,6 +763,9 @@ class _FirstScreenState extends State<FirstScreen> {
           weightKg: weightKg,
           goal: _goal,
           experienceLevel: _experienceLevel,
+          trainingYears: trainingYears,
+          weeklySessions: weeklySessions,
+          athleteClass: _athleteClass,
         );
         setState(() => _surrogateResult = surrogateRes);
 
@@ -743,6 +774,9 @@ class _FirstScreenState extends State<FirstScreen> {
             age: age,
             heightCm: heightCm,
             weightKg: weightKg,
+            trainingYears: trainingYears,
+            weeklySessions: weeklySessions,
+            athleteClass: _athleteClass,
             surrogate: surrogateRes,
           );
           setState(() => _recommendationResult = recommendationRes);
@@ -921,6 +955,20 @@ class _FirstScreenState extends State<FirstScreen> {
     }
   }
 
+  String _athleteClassLabel(String value) {
+    switch (value) {
+      case 'trained':
+        return 'Тренирующийся';
+      case 'competitive':
+        return 'Соревновательный';
+      case 'elite':
+        return 'Элитный';
+      case 'general':
+      default:
+        return 'Общий';
+    }
+  }
+
   String _surrogateLevelLabel(String level) {
     switch (level) {
       case 'low':
@@ -947,6 +995,12 @@ class _FirstScreenState extends State<FirstScreen> {
   }
 
   Color _loadScoreColor(BuildContext context, int score) {
+    if (score < 35) return Colors.green.shade700;
+    if (score < 70) return Colors.orange.shade700;
+    return Theme.of(context).colorScheme.error;
+  }
+
+  Color _riskScoreColor(BuildContext context, int score) {
     if (score < 35) return Colors.green.shade700;
     if (score < 70) return Colors.orange.shade700;
     return Theme.of(context).colorScheme.error;
@@ -1420,7 +1474,9 @@ class _FirstScreenState extends State<FirstScreen> {
   }
 
   Widget _buildSurrogateResultCard(SurrogateResult result) {
-    final scoreColor = _loadScoreColor(context, result.interpretation.loadScore);
+    final stimulusColor = _loadScoreColor(context, result.interpretation.stimulusScore);
+    final riskColor = _riskScoreColor(context, result.interpretation.riskScore);
+    final scoreColor = stimulusColor;
     final stubMode = result.metadata['stub_mode'] == true;
 
     return Container(
@@ -1477,10 +1533,17 @@ class _FirstScreenState extends State<FirstScreen> {
             children: [
               _buildInfoChip(
                 context: context,
-                icon: Icons.speed_rounded,
-                label: 'Индекс нагрузки',
-                value: '${result.interpretation.loadScore}/100',
-                color: scoreColor,
+                icon: Icons.bolt_rounded,
+                label: 'Stimulus score',
+                value: '${result.interpretation.stimulusScore}/100',
+                color: stimulusColor,
+              ),
+              _buildInfoChip(
+                context: context,
+                icon: Icons.shield_outlined,
+                label: 'Risk score',
+                value: '${result.interpretation.riskScore}/100',
+                color: riskColor,
               ),
               _buildInfoChip(
                 context: context,
@@ -1495,6 +1558,13 @@ class _FirstScreenState extends State<FirstScreen> {
                 label: 'Уровень',
                 value: _experienceLabel(_experienceLevel),
                 color: Colors.teal.shade700,
+              ),
+              _buildInfoChip(
+                context: context,
+                icon: Icons.workspace_premium_outlined,
+                label: 'Профиль',
+                value: _athleteClassLabel(_athleteClass),
+                color: Colors.indigo.shade700,
               ),
             ],
           ),
@@ -1594,6 +1664,34 @@ class _FirstScreenState extends State<FirstScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _buildInfoChip(
+                      context: context,
+                      icon: Icons.bolt_outlined,
+                      label: 'Механический стимул',
+                      value: '${result.interpretation.stimulusScore}/100',
+                      color: stimulusColor,
+                    ),
+                    _buildInfoChip(
+                      context: context,
+                      icon: Icons.health_and_safety_outlined,
+                      label: 'Риск перегрузки',
+                      value: '${result.interpretation.riskScore}/100',
+                      color: riskColor,
+                    ),
+                    _buildInfoChip(
+                      context: context,
+                      icon: Icons.category_outlined,
+                      label: 'Категория',
+                      value: _surrogateLevelLabel(result.interpretation.level),
+                      color: scoreColor,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Text(
                   result.interpretation.summary,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
@@ -1706,10 +1804,10 @@ class _FirstScreenState extends State<FirstScreen> {
 
   Widget _buildRecommendationResultCard(RecommendationResult result) {
     final plan = result.plan;
-    final loadColor = _loadScoreColor(
-      context,
-      (_surrogateResult?.interpretation.loadScore ?? 50),
-    );
+    final stimulusScore = _surrogateResult?.interpretation.stimulusScore ?? 50;
+    final riskScore = _surrogateResult?.interpretation.riskScore ?? 50;
+    final loadColor = _loadScoreColor(context, stimulusScore);
+    final riskColor = _riskScoreColor(context, riskScore);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1780,17 +1878,24 @@ class _FirstScreenState extends State<FirstScreen> {
               ),
               _buildInfoChip(
                 context: context,
+                icon: Icons.bolt_outlined,
+                label: 'Stimulus score',
+                value: '$stimulusScore/100',
+                color: loadColor,
+              ),
+              _buildInfoChip(
+                context: context,
+                icon: Icons.shield_outlined,
+                label: 'Risk score',
+                value: '$riskScore/100',
+                color: riskColor,
+              ),
+              _buildInfoChip(
+                context: context,
                 icon: Icons.restaurant_menu_outlined,
                 label: 'Калории',
                 value: '${plan.nutrition.kcalTarget} ккал',
                 color: Colors.teal.shade700,
-              ),
-              _buildInfoChip(
-                context: context,
-                icon: Icons.egg_alt_outlined,
-                label: 'Белок',
-                value: '${plan.nutrition.proteinG} г',
-                color: Colors.orange.shade700,
               ),
             ],
           ),
@@ -2082,6 +2187,80 @@ class _FirstScreenState extends State<FirstScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _trainingYearsController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: 'Стаж тренировок, лет',
+                          hintText: 'Например: 0, 2 или 8',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (v) {
+                          final s = (v ?? '').trim().replaceAll(',', '.');
+                          if (s.isEmpty) return 'Укажите стаж тренировок.';
+                          final years = double.tryParse(s);
+                          if (years == null) return 'Стаж должен быть числом.';
+                          if (years < 0 || years > 40) return 'Стаж вне допустимого диапазона.';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: _weeklySessionsController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Тренировок в неделю',
+                          hintText: 'Например: 3, 5 или 6',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (v) {
+                          final s = (v ?? '').trim();
+                          if (s.isEmpty) return 'Укажите число тренировок в неделю.';
+                          final sessions = int.tryParse(s);
+                          if (sessions == null) return 'Число тренировок должно быть целым.';
+                          if (sessions < 0 || sessions > 14) return 'Число тренировок вне допустимого диапазона.';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      DropdownButtonFormField<String>(
+                        initialValue: _athleteClass,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'general',
+                            child: Text('Общий'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'trained',
+                            child: Text('Тренирующийся'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'competitive',
+                            child: Text('Соревновательный'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'elite',
+                            child: Text('Элитный'),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() => _athleteClass = v ?? 'general'),
+                        decoration: const InputDecoration(
+                          labelText: 'Тренировочный профиль',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      Text(
+                        'Стаж, частота тренировок и тренировочный профиль используются для калибровки суррогатной модели и позволяют отличать обычного пользователя от спортсмена.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.black54,
+                              height: 1.35,
+                            ),
+                      ),
+                      const SizedBox(height: 12),
 
                       if (_imageFile == null)
                         OutlinedButton.icon(
@@ -2226,6 +2405,18 @@ class PlanScreen extends StatelessWidget {
     }
   }
 
+  Color _stimulusColor(int score) {
+    if (score < 35) return Colors.green.shade700;
+    if (score < 70) return Colors.orange.shade700;
+    return Colors.red.shade700;
+  }
+
+  Color _riskColor(int score) {
+    if (score < 35) return Colors.green.shade700;
+    if (score < 70) return Colors.orange.shade700;
+    return Colors.red.shade700;
+  }
+
   Widget _sectionTitle(BuildContext context, String text) {
     return Text(
       text,
@@ -2298,11 +2489,9 @@ class PlanScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final plan = recommendationResult.plan;
-    final loadColor = surrogateResult.interpretation.level == 'low'
-        ? Colors.green.shade700
-        : surrogateResult.interpretation.level == 'moderate'
-            ? Colors.orange.shade700
-            : Theme.of(context).colorScheme.error;
+    final stimulusColor = _stimulusColor(surrogateResult.interpretation.stimulusScore);
+    final riskColor = _riskColor(surrogateResult.interpretation.riskScore);
+    final loadColor = stimulusColor;
 
     return Scaffold(
       appBar: AppBar(
@@ -2367,7 +2556,8 @@ class PlanScreen extends StatelessWidget {
                     children: [
                       _chip(context, Icons.calendar_month_outlined, 'Частота', '${plan.weeklyFrequency} трен./нед.', Theme.of(context).colorScheme.primary),
                       _chip(context, Icons.fitness_center_outlined, 'Сложность', _difficultyLabel(plan.difficulty), Colors.teal.shade700),
-                      _chip(context, Icons.speed_rounded, 'Load score', '${surrogateResult.interpretation.loadScore}/100', loadColor),
+                      _chip(context, Icons.bolt_outlined, 'Stimulus score', '${surrogateResult.interpretation.stimulusScore}/100', stimulusColor),
+                      _chip(context, Icons.shield_outlined, 'Risk score', '${surrogateResult.interpretation.riskScore}/100', riskColor),
                     ],
                   ),
                 ],
@@ -2505,6 +2695,12 @@ class PlanScreen extends StatelessWidget {
                   Text(
                     'Сводка surrogate-модуля: ${surrogateResult.interpretation.summary}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Stimulus score: ${surrogateResult.interpretation.stimulusScore}/100, risk score: ${surrogateResult.interpretation.riskScore}/100. '
+                    'Первый показатель усиливает или ограничивает необходимый тренировочный стимул, второй — ограничивает частоту, интенсивность и темп прогрессии.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4, color: Colors.black54),
                   ),
                 ],
               ),

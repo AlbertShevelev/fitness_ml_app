@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+
 class Keypoint(BaseModel):
     x: float
     y: float
@@ -49,6 +50,9 @@ class Questionnaire(BaseModel):
     weight_kg: float = Field(..., gt=25.0, le=300.0)
     goal: str = Field(..., description="fat_loss | maintenance | muscle_gain | recomposition")
     experience_level: str = Field(default="beginner", description="beginner | intermediate | advanced")
+    weekly_sessions: int = Field(default=3, ge=0, le=14, description="Среднее число тренировок в неделю")
+    training_years: float = Field(default=0.0, ge=0.0, le=40.0, description="Стаж систематических тренировок, лет")
+    athlete_class: str = Field(default="general", description="general | trained | competitive | elite")
 
 
 class SurrogateInput(BaseModel):
@@ -70,8 +74,10 @@ class SurrogateOutput(BaseModel):
 
 
 class SurrogateInterpretation(BaseModel):
-    load_score: int = Field(..., ge=0, le=100)
-    level: str
+    load_score: int = Field(..., ge=0, le=100, description="Совместимость с ранней версией API; равен stimulus_score")
+    stimulus_score: int = Field(..., ge=0, le=100)
+    risk_score: int = Field(..., ge=0, le=100)
+    level: str = Field(..., description="Категория механического стимула: low | moderate | high")
     summary: str
     progression_hint: str
 
@@ -88,6 +94,7 @@ class SurrogatePredictionResponse(BaseModel):
     interpretation: SurrogateInterpretation
     warnings: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
 
 class WorkoutExercise(BaseModel):
     name: str
